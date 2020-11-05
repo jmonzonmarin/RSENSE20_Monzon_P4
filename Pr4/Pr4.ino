@@ -2,19 +2,28 @@
 #include <WiFi.h>
 #include "time.h"
 
+const char* ssid;
+const char* password;
+
 const char* ssidMovil       = "AndroidAP_4359";
 const char* passwordMovil   = "RSENSE-2020";
 
-const char* ssidPC       = "AndroidAP_4359";
+const char* ssidPC       = "PC-JORGE";
 const char* passwordPC   = "01234567";
 
 const char* ntpServer = "europe.pool.ntp.org";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
 
+const uint16_t port = 21;
+const char * host = "192.168.137.1";
+
+tm timeinfo;
+
+WiFiClient client;
+
 void printLocalTime()
 {
-  struct tm timeinfo;
   if(!getLocalTime(&timeinfo)){
     Serial.println("Failed to obtain time");
     return;
@@ -22,30 +31,44 @@ void printLocalTime()
   Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 }
 
-void setup()
-{
-  Serial.begin(115200);
-  
-  //connect to WiFi
-  Serial.printf("Connecting to %s ", ssidMovil);
-  WiFi.begin(ssidMovil, passwordMovil);
+void conexionWifi(const char* ssid, const char* password){
+  Serial.printf("Connecting to %s ", ssid);
+  WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       Serial.print(".");
   }
   Serial.println(" CONNECTED");
+}
+
+
+void setup()
+{
+  Serial.begin(115200);
+  
+  //Conexión Wifi con Internet
+  conexionWifi(ssidMovil, passwordMovil);
   
   //init and get the time
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   printLocalTime();
 
-  //disconnect WiFi as it's no longer needed
+  //Me desconecto de la red Wifi del movil
   WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
+
+  //Conexión Wifi en red local con el PC
+  conexionWifi(ssidPC, passwordPC);
+  
+  //WiFi.mode(WIFI_OFF);
 }
 
-void loop()
-{
+void loop(){
+  if (!client.connect(host, port)) {
+   Serial.println("Connection to host failed");
+   delay(1000);
+   return;
+  }
   delay(1000);
-  printLocalTime();
+  getLocalTime(&timeinfo);
+  client.print(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 }
