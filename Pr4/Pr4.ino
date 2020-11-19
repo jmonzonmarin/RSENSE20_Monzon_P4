@@ -1,104 +1,80 @@
+#include "WiFi.h"
+#include "ESPAsyncWebServer.h"
+#include "SPIFFS.h"
 
-#include <WiFi.h>
-#include "time.h"
 
-const char* ssid;
-const char* password;
+const char* ssid       = "AndroidAP_4359";
+const char* password   = "RSENSE-2020";
 
-const char* ssidMovil       = "AndroidAP_4359";
-const char* passwordMovil   = "RSENSE-2020";
+const int ledPin = 2;
+String ledState;
 
-const char* ssidPC       = "PC-JORGE";
-const char* passwordPC   = "01234567";
+// Create AsyncWebServer object on port 80
+AsyncWebServer server(80);
 
-const char* ntpServer = "europe.pool.ntp.org";
-const long  gmtOffset_sec = 3600;
-const int   daylightOffset_sec = 3600;
+// Replaces placeholder with LED state value
+String processor(const String& var){
+  Serial.println(var);
+  if(var == "STATE"){
+    if(digitalRead(ledPin)){
+      ledState = "ON";
+    }
+    else{
+      ledState = "OFF";
+    }
+    Serial.print(ledState);
+    return ledState;
+  }
+  return String();
+}
+ 
+void setup(){
+  // Serial port for debugging purposes
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
 
-const uint16_t port = 21;
-const char * host = "192.168.137.1";
-
-String dataSockt;
-boolean enviaHora = false;
-
-tm timeinfo;
-
-WiFiClient client;
-
-void printLocalTime()
-{
-  if(!getLocalTime(&timeinfo)){
-    Serial.println("Failed to obtain time");
+  // Initialize SPIFFS
+  if(!SPIFFS.begin(true)){
+    Serial.println("An Error has occurred while mounting SPIFFS");
     return;
   }
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-}
 
-void conexionWifi(const char* ssid, const char* password){
-  Serial.printf("Connecting to %s ", ssid);
+  // Connect to Wi-Fi
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
+    delay(1000);
+    Serial.println("Connecting to WiFi..");
   }
-  Serial.println(" CONNECTED");
-}
 
-void recibeData(){
-  char c[5];
-  int i = 0;
-  if (client){                      //client devuelve un valor booleano True si esta conectado
-    while (client.available()>0) {
-      c[i] = client.read();
-      i++;
-    }
-    //Serial.println("c:");
-    //Serial.println(c);
-    dataSockt = String(c);
-    //Serial.println("dataSockt:");
-    //Serial.println(dataSockt);
-  }
-}
+  // Print ESP32 Local IP Address
+  Serial.println(WiFi.localIP());
 
-void setup()
-{
-  Serial.begin(115200);
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  // Route to load style.css file
+  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/style.css", "text/css");
+  });
+
+  // Route to set GPIO to HIGH
+  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(ledPin, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  // Route to set GPIO to LOW
+  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(ledPin, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+  // Start server
+  server.begin();
+}
  
-  //Conexión Wifi con Internet
-  conexionWifi(ssidMovil, passwordMovil);
-  
-  //init and get the time
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  
-  //Me desconecto de la red Wifi del movil
-  WiFi.disconnect(true);
-  
-  //Conexión Wifi en red local con el PC
-  conexionWifi(ssidPC, passwordPC);
-  
-  client.connect(host, port);
-  while (!client){
-    Serial.println("Conectando al socket");
-    client.connect(host, port);
-  }
-  if (client) {
-    Serial.println("Socket abierto");
-  }
-  //WiFi.mode(WIFI_OFF);
-}
-
 void loop(){
   
-  recibeData();
-  if (dataSockt.startsWith("start")){
-    enviaHora = true;
-  } else if (dataSockt.startsWith("stop")){
-    enviaHora = false;
-  }
-
-  if (enviaHora){
-    delay(1000);
-    getLocalTime(&timeinfo);
-    client.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-  }
 }
