@@ -1,13 +1,20 @@
 #include "WiFi.h"
 #include "ESPAsyncWebServer.h"
 #include "SPIFFS.h"
-
+#include "time.h"
 
 const char* ssid       = "AndroidAP_4359";
 const char* password   = "RSENSE-2020";
 
 const int ledPin = 2;
 String ledState;
+boolean muestraHora = false;
+
+//NTP Server:
+const char* ntpServer = "europe.pool.ntp.org";
+const long  gmtOffset_sec = 3600;
+const int   daylightOffset_sec = 3600;
+tm timeinfo;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -16,16 +23,25 @@ AsyncWebServer server(80);
 String processor(const String& var){
   Serial.println(var);
   if(var == "STATE"){
-    if(digitalRead(ledPin)){
-      ledState = "ON";
+    if(muestraHora){
+      ledState = "Hora";
     }
     else{
-      ledState = "OFF";
+      ledState = "No hora";
     }
-    Serial.print(ledState);
+    Serial.print(muestraHora);
     return ledState;
   }
   return String();
+}
+
+void printLocalTime()
+{
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 }
  
 void setup(){
@@ -48,6 +64,8 @@ void setup(){
 
   // Print ESP32 Local IP Address
   Serial.println(WiFi.localIP());
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  printLocalTime();
 
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -61,13 +79,15 @@ void setup(){
 
   // Route to set GPIO to HIGH
   server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
-    digitalWrite(ledPin, HIGH);    
+    digitalWrite(ledPin, HIGH);  
+    muestraHora = true;  
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
   
   // Route to set GPIO to LOW
   server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request){
-    digitalWrite(ledPin, LOW);    
+    digitalWrite(ledPin, LOW);
+    muestraHora = false;    
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
@@ -76,5 +96,7 @@ void setup(){
 }
  
 void loop(){
-  
+   delay(1000);
+   getLocalTime(&timeinfo);
+   Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 }
