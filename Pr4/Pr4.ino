@@ -15,6 +15,8 @@ const char* ntpServer = "europe.pool.ntp.org";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
 tm timeinfo;
+String fecha;
+int timeHour, timeMin, timeSec; 
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -22,12 +24,13 @@ AsyncWebServer server(80);
 // Replaces placeholder with LED state value
 String processor(const String& var){
   Serial.println(var);
+  
   if(var == "STATE"){
     if(muestraHora){
-      ledState = "Hora";
+      ledState = fecha;
     }
     else{
-      ledState = "No hora";
+      ledState = "No te digo la hora";
     }
     Serial.print(muestraHora);
     return ledState;
@@ -98,5 +101,15 @@ void setup(){
 void loop(){
    delay(1000);
    getLocalTime(&timeinfo);
-   Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+   //Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+   timeHour = timeinfo.tm_hour;
+   timeMin  = timeinfo.tm_min;
+   timeSec  = timeinfo.tm_sec;
+//   Serial.print(timeHour);
+//   Serial.print(":");
+//   Serial.print(timeMin);
+//   Serial.print(":");
+//   Serial.println(timeSec);
+   fecha = String(String(timeHour) + ":" + String(timeMin) +  ":" + String(timeSec));
+   Serial.println(fecha);
 }
