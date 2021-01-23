@@ -1,19 +1,34 @@
 #include <ArduinoJson.h>
+#include <SD.h>
+#include "WiFi.h"
+#include <ESP32_FTPClient.h>
 
-const int capacity = JSON_ARRAY_SIZE(100) + 100*JSON_OBJECT_SIZE(4);    //El tamaño del array indica el numero de medidas que queremos guardar en el fichero.
-//El tamaño del objeto nos dice el número de valores que habrá dentro del objeto. Al estar usando el prtocolo SenML
-// vamos a utilizar 4 valores: n (nombre), u (unidades), t (tiempo), v (valor)
+//variables necesarias JSON
+const int capacity = JSON_ARRAY_SIZE(100) + 100*JSON_OBJECT_SIZE(4);    
 StaticJsonDocument<capacity> doc;
 
-
+//variables necesarias Timer
 hw_timer_t * timer = NULL;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
+//variables Wifi
+const char* ssid       = "AndroidAP_4359";
+const char* password   = "RSENSE-2020";
+
+//Variables FTP
+char ftp_server[] = "155.210.150.77";
+char ftp_user[]   = "rsense";
+char ftp_pass[]   = "rsense";
+ESP32_FTPClient ftp (ftp_server,ftp_user,ftp_pass, 5000, 2);
+
+//variables auxiliares
 int interruptCounter = 0;
 volatile int numeroMedidas = 0;
 int numeroMedidasAnt = 0;
 int i = 0;
-String json;
+String datos;
+
+char datosChar[capacity];
 
 void almacenaDatos() {
   JsonObject obj1 = doc.createNestedObject();
@@ -24,11 +39,22 @@ void almacenaDatos() {
 }
 
 void escribeFichero() {
-  serializeJson(doc, json);          
+  serializeJson(doc, datosChar);          
   doc.clear(); 
 }
 
-void IRAM_ATTR onTimer() {              //Esta funión incrementa el contador de interrupciones. Al aumentar el contador, el loop principal sabe que ha ocurrido una interrupción
+void mandaFichero(){
+  ftp.OpenConnection();
+  //cambiando al directorio
+    ftp.ChangeWorkDir("rsense/jmonzon");
+    ftp.InitFile("Type A");
+    ftp.NewFile("dataTemp.json");
+    ftp.Write(datosChar);
+  ftp.CloseFile();
+  ftp.CloseConnection();
+}
+
+void IRAM_ATTR onTimer() {              //Esta función incrementa el contador de interrupciones. Al aumentar el contador, el loop principal sabe que ha ocurrido una interrupción
   portENTER_CRITICAL_ISR(&timerMux);
   interruptCounter++;
   almacenaDatos();
@@ -38,20 +64,28 @@ void IRAM_ATTR onTimer() {              //Esta funión incrementa el contador de
 void setup() {
   Serial.begin(115200);
 
+  //lineas necesarias para el timer
   timer = timerBegin(0, 80, true);
   timerAttachInterrupt(timer, &onTimer, true);
   timerAlarmWrite(timer, 100000, true);        //Genera una interrupción 1 vez por cada 0,1s
   timerAlarmEnable(timer);
 
+  //conexión a wifi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.println("Connecting to WiFi..");
+  }
+  Serial.println(WiFi.localIP());
+  
 }
 
 void loop() {
-
   if (interruptCounter == 100) {
     Serial.println("Mostrando fichero JSON:");
     escribeFichero();
-    Serial.println(json);
-    json.clear();
+    Serial.println(datosChar);
+    mandaFichero();
     Serial.println("");
     interruptCounter = 0;
   }
